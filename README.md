@@ -7,7 +7,7 @@ ZeroLaunch 第三方插件的最小骨架：一个 Rust 子进程，通过 stdio
 ## 目录结构
 
 ```
-├── Cargo.toml          # 依赖 zerolaunch-plugin-sdk-rust / plugin-api / plugin-protocol
+├── Cargo.toml          # 依赖 zerolaunch-plugin-sdk-rust / plugin-api
 ├── manifest.toml       # 插件清单（[plugin] 元数据、运行时命令、面板入口），打包时位于 zip 根
 ├── package.py          # 打包脚本（cargo build --release + 生成安装 zip）
 ├── src/main.rs         # 启动骨架：init() + plugin::app().run()（随模板同步，尽量别改）
@@ -21,12 +21,13 @@ ZeroLaunch 第三方插件的最小骨架：一个 Rust 子进程，通过 stdio
 
 ## 快速开始
 
-1. **改标识与元数据**——只在 `manifest.toml` 的 `[plugin]` 段声明（`id` / `name` / `version` / `description` / `author` / `mode` / `triggerKeywords` / `supportedOs` / `priority` 必填），代码里不用重复填；`Cargo.toml` 的 `package.version` 与 `[plugin].version` 保持一致。
+1. **改标识与元数据**——插件级元数据只写在 `manifest.toml` 的 `[plugin]` 段（`id` / `name` / `version` / `description` / `author` / `mode` / `triggerKeywords` / `supportedOs` / `priority` 必填），宿主读清单构造，插件代码不声明也不上报；`Cargo.toml` 的 `package.version` 与 `[plugin].version` 保持一致。唯一要在代码里对齐的是 `Configurable::core()` 的组件 ID（见下）。
 
 2. **实现 `Plugin` trait**（`src/plugin.rs` 是完整可跑示例，写法与 SDK 文档一致）：
-   - `metadata()`：插件元数据由清单 `[plugin]` 段驱动（见上）。`mode` 决定形态——`panel`（沉浸式：候选项/热键唤醒后接管窗口）或 `inline`（行内：触发词前缀路由）；`hotkey` 仅 `panel` 形态生效。
+   - `Configurable::core()`：返回组件级描述符 `ComponentCore`（组件 ID / 名称 / 描述 / 类型 / 优先级）。组件 ID 与清单 `[plugin].id` 一致。`mode` 决定形态——`panel`（沉浸式：候选项/热键唤醒后接管窗口）或 `inline`（行内：触发词前缀路由）；`hotkey` 仅 `panel` 形态生效。
    - `query()`：返回 `QueryResponse::List`（标准搜索结果，走搜索栏/CLI）或 `QueryResponse::CustomPanel`（面板自渲染，`data` 可承载任意 JSON，`keep_search_bar` 决定是否保留搜索栏）。
    - `execute_action()`：动作执行（打开文件等经 `host()` 平台 API）；`interaction_policy()` 声明面板按键绑定。
+   - 插件级元数据（像 `metadata()` 那样在进程内声明 id、触发词、优先级）已不属于插件侧契约，不用实现。
 3. **（可选）设置项**：实现 `Configurable`——`setting_schema()` 声明后宿主设置页自动渲染，`apply_settings()` / `get_settings()` 应用与回读。
 4. **（可选）i18n**：面向用户的文本用 `t_key("key")`，译文放 `i18n/zh-Hans.json`、`en.json`；面板侧用 `host.t(key)`（同键）。
 5. **（可选）面板**：`[ui].panelEntry` 指向 `ui/panel.mjs`，导出 `mount(rootEl, host)`，在宿主 Shadow DOM 内执行。
@@ -38,10 +39,11 @@ ZeroLaunch 第三方插件的最小骨架：一个 Rust 子进程，通过 stdio
 |---|---|
 | 骨架 vs 业务 | `src/main.rs`（十来行启动骨架）在同步集合里，**尽量别改**；确需改动就照常改，同步 PR 人工合并。业务代码一律写 `src/plugin.rs`，追加模块放 `src/plugin/`（同时把 `src/plugin/` 加进 `.github/.templatesyncignore`）。 |
 | manifest 键名 | 宿主 schema 用 camelCase（`panelEntry` / `settingsEntry` / `resultItemEntry`）。写成 snake_case **不报错但被静默忽略**；`package.py` 对这三个键做了预检告警。 |
-| 插件 id | 必须匹配 `[a-z][a-z0-9]*(\.[a-z][a-z0-9_-]*)+\z`（全小写反向域名），只写在清单里。 |
-| 插件元数据 | 唯一来源是 `manifest.toml` 的 `[plugin]` 段（必填：`id`/`name`/`version`/`description`/`author`/`mode`/`triggerKeywords`/`supportedOs`/`priority`；可选：`hotkey`）。缺字段或取值非法时清单解析失败、插件启动即退出，报错里给出具体字段。 |
+| 插件 id | 必须匹配 `[a-z][a-z0-9]*(\.[a-z][a-z0-9_-]*)+\z`（全小写反向域名），写在清单里；代码里的组件 ID（`ComponentCore::new` 第一个参数）与它一致。 |
+| 插件元数据 | 唯一来源是 `manifest.toml` 的 `[plugin]` 段（必填：`id`/`name`/`version`/`description`/`author`/`mode`/`triggerKeywords`/`supportedOs`/`priority`；可选：`hotkey`），宿主读取后构造，插件进程既不声明也不上报。缺字段或取值非法时清单解析失败、插件加载失败，报错里给出具体字段。 |
+| 组件描述符 | 插件进程只声明组件级信息：`Configurable::core()` 的 `ComponentCore`（组件 ID / 名称 / 描述 / 类型 / 优先级），经 `plugin/get_components` 交宿主。组件文案可用 `t_key()` 本地化。 |
 | SDK 版本 | 依赖 `zerolaunch-plugin-* = "0.2"`：清单里的 `mode`/`triggerKeywords`/`supportedOs`/`priority` 由 0.2 起的清单 schema 支持，不要降级。 |
-| `t_key` 时机 | `t_key()` 依赖握手注入的插件 id；在 `run()` 之前构造元数据时调用**必须先 `zerolaunch_plugin_sdk_rust::init()`**——骨架 `main()` 已含，业务文件里无需再调。 |
+| `t_key` 时机 | `t_key()` 依赖握手注入的插件 id；在 `run()` 之前构造组件文案（如 `ComponentCore` 的 name/description）时调用**必须先 `zerolaunch_plugin_sdk_rust::init()`**——骨架 `main()` 已含，业务文件里无需再调。 |
 | 语言包结构 | 键与 `t_key` 路径一致、可带点号（`"booster.name"` ↔ `t_key("booster.name")`）；值只能是字符串或嵌套对象，出现数字/布尔会让宿主拒绝加载整包。 |
 | 面板样式 | 用宿主 CSS 变量（`--bg-primary`、`--text-primary` 等）即自动跟随宿主主题，不要写死颜色。 |
 | 面板销毁 | `mount` 内创建的定时器 / window 级监听器必须清理：`host.onDestroy(cb)` 注册回调，或让 `mount` 返回 cleanup 函数（二选一）。否则反复开关面板会线性累积泄漏。 |

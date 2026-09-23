@@ -1,5 +1,9 @@
 //! Hello World 示例插件——**业务文件**：不参与模板同步（`.templatesyncignore` 排除 `src/plugin.rs`）。
 //!
+//! 插件级元数据（id / name / version / description / author / triggerKeywords / supportedOs /
+//! priority / mode / hotkey / 图标）由宿主读 `manifest.toml` 构造；本文件只实现行为与**组件级**
+//! 描述符（`Configurable::core()`）。
+//!
 //! 照常实现宿主的 `Plugin` / `Configurable` trait；启动骨架（`src/main.rs`）只负责 `init()` + `app().run()`。
 //! 面向用户的文本用 `t_key("key")` 生成命名空间键（`plugin.<插件id>.<key>`），译文放 `i18n/<lang>.json`。
 
@@ -10,23 +14,10 @@ use zerolaunch_plugin_api::config::{
     ComponentCore, ComponentType, Configurable, SettingDefinition,
 };
 use zerolaunch_plugin_api::{
-    Plugin, PluginContext, PluginError, PluginHandle, PluginKind, PluginMetadata,
+    Plugin, PluginContext, PluginError, PluginHandle,
     Query, QueryResponse, ListItem, ResultAction,
 };
-use zerolaunch_plugin_protocol::Manifest;
 use zerolaunch_plugin_sdk_rust::{PluginApp, t_key};
-
-/// 读取插件目录下的 `manifest.toml`。
-///
-/// 宿主 spawn 插件时把工作目录设为插件目录，故清单与插件进程同源；解析用
-/// `zerolaunch_plugin_protocol::Manifest`（宿主同一套 schema），
-/// 必填字段缺一即解析失败并退出（宿主侧表现为插件加载失败）。
-fn read_manifest() -> Manifest {
-    let path = "manifest.toml";
-    let raw = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("读取插件清单 {path} 失败：{e}（请在插件目录下运行插件）"));
-    toml::from_str(&raw).unwrap_or_else(|e| panic!("解析插件清单 {path} 失败：{e}"))
-}
 
 /// Hello World 示例插件 — 演示第三方插件的最小骨架与 i18n 用法。
 ///
@@ -34,41 +25,22 @@ fn read_manifest() -> Manifest {
 /// （`plugin.com.example.hello-world.<key>`），宿主加载插件目录
 /// `i18n/<lang>.json` 语言包后，前端对 key-or-literal 文本自动翻译。
 struct HelloWorldPlugin {
-    /// 组件 ID、名称、类型等基础元数据（`Configurable` trait 默认实现委托于此）。
+    /// 组件级描述符（组件 ID / 名称 / 描述 / 类型 / 优先级），随 `plugin/get_components` 上报；
+    /// `Configurable` trait 默认实现委托于此。
     core: ComponentCore,
-    /// 插件静态元数据：id、触发关键词、优先级等。
-    metadata: PluginMetadata,
 }
 
 impl HelloWorldPlugin {
     fn new() -> Self {
-        // 元数据全部来自清单：必填字段由清单 schema 强制，解析通过即齐备
-        let plugin = read_manifest().plugin;
         Self {
+            // 组件 ID 与清单 `[plugin].id` 一致；名称与描述是设置面板里的组件文案。
             core: ComponentCore::new(
-                plugin.id.clone(),
-                plugin.name.clone(),
-                plugin.description.clone(),
+                "com.example.hello-world".to_string(),
+                "Hello World".to_string(),
+                "演示第三方插件最小骨架的示例组件".to_string(),
                 ComponentType::Plugin,
-                plugin.priority,
+                100,
             ),
-            metadata: PluginMetadata {
-                id: plugin.id,
-                name: plugin.name,
-                version: plugin.version,
-                description: plugin.description,
-                author: plugin.author,
-                trigger_keywords: plugin.trigger_keywords,
-                supported_os: plugin.supported_os,
-                priority: plugin.priority,
-                // 第三方插件种类（宿主加载时强制覆盖为 ThirdParty，此处显式声明保持语义一致）
-                kind: PluginKind::ThirdParty,
-                // 全局唤醒热键，仅 panel 形态注册；清单未声明则为 None
-                hotkey: plugin.hotkey,
-                // panel 形态插件图标由宿主从 manifest [icon] 段读取，此处无需填写
-                icon: None,
-                mode: plugin.mode,
-            },
         }
     }
 }
@@ -87,10 +59,6 @@ impl Configurable for HelloWorldPlugin {
 
 #[async_trait]
 impl Plugin for HelloWorldPlugin {
-    fn metadata(&self) -> &PluginMetadata {
-        &self.metadata
-    }
-
     async fn init(
         &self,
         _ctx: &PluginContext,
