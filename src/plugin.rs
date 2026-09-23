@@ -10,10 +10,23 @@ use zerolaunch_plugin_api::config::{
     ComponentCore, ComponentType, Configurable, SettingDefinition,
 };
 use zerolaunch_plugin_api::{
-    Plugin, PluginContext, PluginError, PluginHandle, PluginKind, PluginMetadata, PluginMode,
+    Plugin, PluginContext, PluginError, PluginHandle, PluginKind, PluginMetadata,
     Query, QueryResponse, ListItem, ResultAction,
 };
+use zerolaunch_plugin_protocol::Manifest;
 use zerolaunch_plugin_sdk_rust::{PluginApp, t_key};
+
+/// 读取插件目录下的 `manifest.toml`。
+///
+/// 宿主 spawn 插件时把工作目录设为插件目录，故清单与插件进程同源；解析用
+/// `zerolaunch_plugin_protocol::Manifest`（宿主同一套 schema），
+/// 必填字段缺一即解析失败并退出（宿主侧表现为插件加载失败）。
+fn read_manifest() -> Manifest {
+    let path = "manifest.toml";
+    let raw = std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("读取插件清单 {path} 失败：{e}（请在插件目录下运行插件）"));
+    toml::from_str(&raw).unwrap_or_else(|e| panic!("解析插件清单 {path} 失败：{e}"))
+}
 
 /// Hello World 示例插件 — 演示第三方插件的最小骨架与 i18n 用法。
 ///
@@ -29,31 +42,32 @@ struct HelloWorldPlugin {
 
 impl HelloWorldPlugin {
     fn new() -> Self {
+        // 元数据全部来自清单：必填字段由清单 schema 强制，解析通过即齐备
+        let plugin = read_manifest().plugin;
         Self {
             core: ComponentCore::new(
-                "com.example.hello-world".to_string(),
-                "Hello World".to_string(),
-                "A simple hello-world plugin".to_string(),
+                plugin.id.clone(),
+                plugin.name.clone(),
+                plugin.description.clone(),
                 ComponentType::Plugin,
-                100,
+                plugin.priority,
             ),
             metadata: PluginMetadata {
-                id: "com.example.hello-world".to_string(),
-                name: "Hello World".to_string(),
-                version: "0.1.0".to_string(),
-                description: "A simple hello-world plugin".to_string(),
-                author: "You".to_string(),
-                trigger_keywords: vec!["hello".to_string(), "hw".to_string()],
-                supported_os: vec!["windows".to_string()],
-                priority: 100,
+                id: plugin.id,
+                name: plugin.name,
+                version: plugin.version,
+                description: plugin.description,
+                author: plugin.author,
+                trigger_keywords: plugin.trigger_keywords,
+                supported_os: plugin.supported_os,
+                priority: plugin.priority,
                 // 第三方插件种类（宿主加载时强制覆盖为 ThirdParty，此处显式声明保持语义一致）
                 kind: PluginKind::ThirdParty,
-                // 声明唤醒热键（如 "Ctrl+E"）可填此字段；是否可热键唤醒取决于 mode（仅 panel 形态注册热键表）
-                hotkey: None,
+                // 全局唤醒热键，仅 panel 形态注册；清单未声明则为 None
+                hotkey: plugin.hotkey,
                 // panel 形态插件图标由宿主从 manifest [icon] 段读取，此处无需填写
                 icon: None,
-                // 插件形态：行内插件填 Inline，完全插件模式（trigger 类型）填 Panel
-                mode: PluginMode::Inline,
+                mode: plugin.mode,
             },
         }
     }
