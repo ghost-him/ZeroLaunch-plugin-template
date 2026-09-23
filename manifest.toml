@@ -25,3 +25,7 @@ provides = ["plugin"]
 
 [ui]
 panelEntry = "ui/panel.mjs"
+
+[icon]
+# 插件图标文件（相对插件目录；仅 panel 形态在界面展示）
+path = "icon.svg"

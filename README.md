@@ -8,10 +8,11 @@ ZeroLaunch 第三方插件的最小骨架：一个 Rust 子进程，通过 stdio
 
 ```
 ├── Cargo.toml          # 依赖 zerolaunch-plugin-sdk-rust / plugin-api
-├── manifest.toml       # 插件清单（[plugin] 元数据、运行时命令、面板入口），打包时位于 zip 根
+├── manifest.toml       # 插件清单（[plugin] 元数据、运行时命令、面板入口、图标），打包时位于 zip 根
 ├── package.py          # 打包脚本（cargo build --release + 生成安装 zip）
 ├── src/main.rs         # 启动骨架：init() + plugin::app().run()（随模板同步，尽量别改）
 ├── src/plugin.rs       # 插件实现（你自己的代码，不参与同步）
+├── icon.svg            # 插件图标（清单 [icon] 声明，随包分发）
 ├── ui/                 # 自定义面板资源（可选）
 ├── i18n/               # 语言包（可选）：宿主加载时并入翻译目录，t_key() 自动带插件 id 前缀
 └── .github/workflows/  # CI（check/build/打包）、推 tag 自动发 Release、模板同步入口
@@ -41,13 +42,14 @@ ZeroLaunch 第三方插件的最小骨架：一个 Rust 子进程，通过 stdio
 | manifest 键名 | 宿主 schema 用 camelCase（`panelEntry` / `settingsEntry` / `resultItemEntry`）。写成 snake_case **不报错但被静默忽略**；`package.py` 对这三个键做了预检告警。 |
 | 插件 id | 必须匹配 `[a-z][a-z0-9]*(\.[a-z][a-z0-9_-]*)+\z`（全小写反向域名），写在清单里；代码里的组件 ID（`ComponentCore::new` 第一个参数）与它一致。 |
 | 插件元数据 | 唯一来源是 `manifest.toml` 的 `[plugin]` 段（必填：`id`/`name`/`version`/`description`/`author`/`mode`/`triggerKeywords`/`supportedOs`/`priority`；可选：`hotkey`），宿主读取后构造，插件进程既不声明也不上报。缺字段或取值非法时清单解析失败、插件加载失败，报错里给出具体字段。 |
+| 插件图标 | 由 `[icon].path` 声明（相对插件目录，随包分发，支持 svg/png/ico/jpg/webp/gif，按扩展名定类型）；文件缺失只在宿主日志告警、不阻断加载。仅 `mode = "panel"` 形态在插件列表/底部栏/搜索栏前缀展示，行内形态声明了也不显示。 |
 | 组件描述符 | 插件进程只声明组件级信息：`Configurable::core()` 的 `ComponentCore`（组件 ID / 名称 / 描述 / 类型 / 优先级），经 `plugin/get_components` 交宿主。组件文案可用 `t_key()` 本地化。 |
 | SDK 版本 | 依赖 `zerolaunch-plugin-* = "0.2"`：清单里的 `mode`/`triggerKeywords`/`supportedOs`/`priority` 由 0.2 起的清单 schema 支持，不要降级。 |
 | `t_key` 时机 | `t_key()` 依赖握手注入的插件 id；在 `run()` 之前构造组件文案（如 `ComponentCore` 的 name/description）时调用**必须先 `zerolaunch_plugin_sdk_rust::init()`**——骨架 `main()` 已含，业务文件里无需再调。 |
 | 语言包结构 | 键与 `t_key` 路径一致、可带点号（`"booster.name"` ↔ `t_key("booster.name")`）；值只能是字符串或嵌套对象，出现数字/布尔会让宿主拒绝加载整包。 |
 | 面板样式 | 用宿主 CSS 变量（`--bg-primary`、`--text-primary` 等）即自动跟随宿主主题，不要写死颜色。 |
 | 面板销毁 | `mount` 内创建的定时器 / window 级监听器必须清理：`host.onDestroy(cb)` 注册回调，或让 `mount` 返回 cleanup 函数（二选一）。否则反复开关面板会线性累积泄漏。 |
-| 打包布局 | `manifest.toml` 必须在 zip 根；`bin/` 内 exe 的文件名取自 `[runtime].command`；`extra/` 内容并入 zip 根，放必须与 exe 同目录的运行时文件（如 `Everything64.dll`）。 |
+| 打包布局 | `manifest.toml` 必须在 zip 根；`bin/` 内 exe 的文件名取自 `[runtime].command`；`ui/`、`i18n/` 与 `[icon].path` 指向的图标按原相对路径打入；`extra/` 内容并入 zip 根，放必须与 exe 同目录的运行时文件（如 `Everything64.dll`）。 |
 | 宿主兼容 | 加载期只校验协议 major 版本；manifest 没有宿主版本下限字段（旧模板的 `minHostVersion` 已废弃，写了也会被忽略）。 |
 
 ## 调试与验证
