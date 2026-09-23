@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # 用 PAT 时必须关掉凭证持久化（action 自行处理 git 凭证）
           persist-credentials: false

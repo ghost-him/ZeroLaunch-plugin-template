@@ -14,7 +14,7 @@ ZeroLaunch 第三方插件的最小骨架：一个 Rust 子进程，通过 stdio
 ├── src/plugin.rs       # 插件实现（你自己的代码，不参与同步）
 ├── ui/                 # 自定义面板资源（可选）
 ├── i18n/               # 语言包（可选）：宿主加载时并入翻译目录，t_key() 自动带插件 id 前缀
-└── .github/workflows/  # CI（cargo check / build / 打包）与模板同步入口
+└── .github/workflows/  # CI（check/build/打包）、推 tag 自动发 Release、模板同步入口
 ```
 
 `src/main.rs` 只做启动（`init()` 预置插件 id → `plugin::app().run()`），十来行、随模板同步；插件实现与装配都在 `src/plugin.rs`——照常实现 SDK 的 `Plugin` / `Configurable` trait，并导出 `pub fn app() -> PluginApp`。
@@ -63,12 +63,17 @@ ZeroLaunch 第三方插件的最小骨架：一个 Rust 子进程，通过 stdio
 
 ## 发布
 
+推 tag 自动发布（`.github/workflows/release.yml`，随模板同步下发）：`git tag v0.1.0 && git push origin v0.1.0` —— GitHub Actions 构建 + 打包，把 `dist/zerolaunch-plugin-<短id>-v<版本>.zip` 作为附件发到 Release。要求 tag 形如 `v<major>.<minor>.<patch>`，且与 `manifest.toml [plugin].version`、`Cargo.toml version` 三处一致（不一致直接失败）。补发：Actions → 「发布插件」→ Run workflow，填该 tag。
+
+本地打包（同一套流程）：
+
 ```bash
 python package.py              # 等价于 cargo build --release 后打包（无 Python 时用 uv run --python 3.12 python package.py）
 python package.py --no-build    # 复用现有产物直接打包
 ```
 
 产物 `zerolaunch-plugin-<插件短id>-v<版本号>.zip`（短 id = `[plugin].id` 末段，`com.example.hello-world` → `hello-world`）。
+插件市场按 `/releases/latest` 的这个 zip 附件自动安装，别改产物名与 zip 布局。
 
 安装：设置 → 插件管理 → 安装本地插件，选择该 zip；或手动解压到 `%USERPROFILE%/.ZeroLaunch-rs/plugins/<plugin-id>/` 后重新加载。
 
@@ -76,5 +81,5 @@ python package.py --no-build    # 复用现有产物直接打包
 
 同步跑在插件仓库这一侧（`.github/workflows/sync-template.yml`，模板与各插件仓库逐字节一致，改动在模板仓库做）。业务文件（`src/plugin.rs`、`ui/`、`i18n/`、`Cargo.*`、`manifest.toml`、`README.md`）按 `.github/.templatesyncignore` 保留本仓库内容，其余框架文件（`src/main.rs` 骨架、`package.py`、`ci.yml`、`sync-template.yml` 等）由 [actions-template-sync](https://github.com/AndreasAugustin/actions-template-sync) 合入，有差异时自动提 PR（无差异不提）——**宿主/SDK API 变更靠这一步送进插件仓库**。
 
-- **触发**：每周一定时一次；模板刚改完想立刻同步，到仓库 Actions 页手动跑 `sync-template`。
+- **触发**：每周一 02:23 UTC 定时跑一次（GitHub 高峰时段可能延迟）；模板刚改完想立刻同步，到本仓库 Actions 页手动运行 `sync-template`。
 - **首次配置**：配 secret `TEMPLATE_SYNC_TOKEN`（PAT，`contents: write` + `workflow`）——同步会推 `.github/workflows/` 下的文件，默认 `GITHUB_TOKEN` 没有 `workflow` 权限会失败；不配则需在 Settings → Actions → General 勾选 *Allow GitHub Actions to create and approve pull requests*，且同步 PR 的 CI 需人工批准。
