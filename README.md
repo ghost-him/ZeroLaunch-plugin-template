@@ -75,6 +75,13 @@ python package.py --no-build    # 复用现有产物直接打包
 产物 `zerolaunch-plugin-<插件短id>-v<版本号>.zip`（短 id = `[plugin].id` 末段，`com.example.hello-world` → `hello-world`）。
 插件市场按 `/releases/latest` 的这个 zip 附件自动安装，别改产物名与 zip 布局。
 
+同一目录下还有**市场元数据附件**（`package.py` 一并产出，发布 CI 会连同 zip 一起上传）：
+
+- `dist/manifest.toml`：清单原文（固定名）；
+- `dist/<图标文件名>`：`manifest.toml [icon].path` 声明的图标文件（仅当声明了 `[icon]`）。
+
+宿主「插件市场」卡片直接读这两个附件展示图标、插件名/版本/作者与能力标签，**不下载整包**；缺少它们时卡片退回仓库描述 + 仓库所有者头像，安装不受影响。图标附件名取图标文件自身文件名（Release 附件名不含目录分隔符），宿主按 `[icon].path` 的末段匹配——所以图标放插件根目录即可：指向 `ui/`、`i18n/` 时会与那两个目录的整目录打包叠加，同一个 zip 里出现两条同名条目。
+
 安装：设置 → 插件管理 → 安装本地插件，选择该 zip；或手动解压到 `%USERPROFILE%/.ZeroLaunch-rs/plugins/<plugin-id>/` 后重新加载。
 
 ## 模板同步（框架文件自动更新）
