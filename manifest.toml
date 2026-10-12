@@ -1,7 +1,7 @@
 [plugin]
 id = "com.example.hello-world"
 name = "Hello World 插件"
-version = "0.2.0"
+version = "0.2.1"
 description = "一个简单的 ZeroLaunch 第三方插件示例"
 author = "Your Name <you@example.com>"
 # 插件形态：inline = 触发词路由（行内）；panel = 候选项/热键唤醒（接管搜索窗口）
